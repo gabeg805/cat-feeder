@@ -13,7 +13,9 @@ Clone the repo:
 
 `git clone https://github.com/gabeg805/cat-feeder`
 
-Ensure the `SERVO_PIN` variable in `catfeeder.py` matches the same pin in your setup.
+> [!NOTE]
+> Ensure the `SERVO_PIN` variable in `catfeeder.py` matches the same pin in
+> your setup.
 
 ## Usage
 
@@ -45,5 +47,7 @@ file instead, simply add the `--log-file=<LOG_FILE>` option to the command
 line.
 
 ## Uninstall
+
+Remove the repo:
 
 `rm -rf cat-feeder/`
