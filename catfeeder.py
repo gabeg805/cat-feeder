@@ -1,252 +1,328 @@
-#!/usr/bin/env python
-# ******************************************************************************
+#!/usr/bin/env python3
 # 
 # NAME
-#	  catfeeder.py
+#     catfeeder.py
+# 
+# SYNOPSIS
+#     catfeeder.py [options] <args>
 # 
 # DESCRIPTION
-#	  Run the servo motor to dispense food from the feeder.
-# 
-# SYNTAX
-#	  catfeeder.py [options] <args>
+#     Run a servo motor to dispense food from a cat feeder.
 # 
 # AUTHOR
-#	  Gabriel Gonzalez
+#     Gabriel Gonzalez
 # 
-# NOTES
-#	  None.
-# 
-# ******************************************************************************
 
-import __init__
 import argparse
-import motor.servo
+import logging
 import os
-import personal.util
+import requests
 import sys
 import tempfile
 import time
+import RPi.GPIO as GPIO
+from RpiMotorLib import rpiservolib
+from logging.handlers import RotatingFileHandler
 
-##
-# Project name.
-##
-PROJECT = os.path.basename(sys.argv[0])
+# Servo pin number and frequency
+SERVO_PIN  = 18
+SERVO_FREQUENCY = 50
 
-##
-# Pin number of the motor.
-##
-PIN  = 18
+# Skip indicator information
+SKIP_INDICATOR_DIRECTORY = os.path.join(os.getenv('HOME'), ".config", "catfeeder")
+SKIP_INDICATOR_PREFIX = 'skip_catfeeder'
 
-##
-# Exit statuses.
-##
-ESERVO = 2
-EDIRECTION = 3
+# Create the logger
+logger = logging.getLogger(__name__)
 
-def check_direction(direction):
+def cleanup_skip_indicator_file(addr=''):
 	'''
-	Check the direction that was provided to ensure it is valid.
+	Cleanup a skip indicator file that would have skipped the next feeding time.
 	'''
 
-	direction = direction.lower()
-	if direction != 'cw' and direction != 'ccw':
-		print "%s: Invalid spin direction '%s'. Allowed spins are 'CW' or 'CCW'." \
-			% (PROJECT, direction.upper())
-		return False
+	logger.info("Cleaning up a skip indicator file.")
+
+	# Send message
+	if addr:
+		message = "Skipped feeding time"
+		timestamp = time.strftime("%b %d, %-I:%M %p")
+		notifyMessage = f"**{message}**\n{timestamp}"
+
+		send_message(addr, notifyMessage)
+
+	# Remove the skip file
+	filepath = find_skip_indicator_file()
+
+	if filepath:
+		try:
+			logger.info(f"Cleaning up skip indicator file : {filepath}")
+			os.remove(filepath)
+		except OSError as e:
+			logger.exception(exc_info=e)
+
+	# Skip file not found
 	else:
-		return True
+		logger.warning("No skip indicator file found to cleanup.")
 
-def check_servo(servo):
+	return
+
+def create_skip_indicator_file():
 	'''
-	Check that the servo is ready to be run.
-	'''
-
-	if not servo.is_pin():
-		print "%s: Invalid circuit board pin '%s'." % (PROJECT, servo.get_pin())
-		return False
-
-	if not servo.is_duration():
-		print "%s: Invalid time to keep feeder motor spinning '%s'." \
-			% (PROJECT, servo.get_duration())
-		return False
-
-	return True
-
-def get_recent_skip_indicator():
-	'''
-	Return the file path to the most recent skip indicator.
+	Create a file that acts as an indicator to skip the next feeding time.
 	'''
 
-	tmpdir = '/tmp'
-	naming = get_skip_indicator_naming_convention()
+	logger.info("Creating a skip indicator file so that the next feeding time is skipped.")
 
-	for a in os.listdir(tmpdir):
-		filepath = os.path.join(tmpdir, a)
-		if os.path.isfile(filepath) and naming in a:
+	# Make the directory if it does not exist
+	if not os.path.isdir(SKIP_INDICATOR_DIRECTORY):
+		logger.info(f"Creating directory where skip indicator files will be made : {SKIP_INDICATOR_DIRECTORY}")
+		os.makedirs(SKIP_INDICATOR_DIRECTORY, mode=0o775)
+
+		# Change the permissions in case above did not work
+		try:
+			os.chmod(SKIP_INDICATOR_DIRECTORY, 0o775)
+		except OSError as e:
+			logger.exception(exc_info=e)
+
+	# Make temporary file (skip indicator file)
+	tempfile.mkstemp(prefix=f'{SKIP_INDICATOR_PREFIX}_', suffix='.txt', dir=SKIP_INDICATOR_DIRECTORY)
+	return
+
+def find_skip_indicator_file():
+	'''
+	Get the file path to a skip indicator file.
+
+	Returns:
+		str: The file path to a skip indicator file.
+	'''
+
+	# Directory does not exist
+	if not os.path.isdir(SKIP_INDICATOR_DIRECTORY):
+		return ''
+
+	# Iterate over each file in the directory
+	for a in os.listdir(SKIP_INDICATOR_DIRECTORY):
+		filepath = os.path.join(SKIP_INDICATOR_DIRECTORY, a)
+
+		# Check if the file is a file (not a directory) and has the skip indicator
+		# naming convention in it
+		if os.path.isfile(filepath) and SKIP_INDICATOR_PREFIX in a:
 			return filepath
+
+	# Unable to find a skip indicator file
 	return ''
-
-def get_skip_indicator_naming_convention():
-	'''
-	Return the naming convention for the skip indicator.
-	'''
-
-	return 'skip_catfeeder'
-
-def is_clockwise(direction):
-	'''
-	Return True if the direction is clockwise, and False otherwise.
-	'''
-
-	direction = direction.lower()
-	return direction == 'cw'
-
-def is_counter_clockwise(direction):
-	'''
-	Return True if the direction is counter-clockwise, and False otherwise.
-	'''
-
-	direction = direction.lower()
-	return direction == 'ccw'
 
 def main():
 	'''
 	Main for cat feeder.
 	'''
 
-	parser = argparse.ArgumentParser(prog=PROJECT)
-	parser.add_argument('-d', '--direction', action='store', default='CCW',
-		help='Direction the motor should spin in (either "CW" or "CCW").')
-	parser.add_argument('-e', '--email', action='store', default='',
-		help='Email any issues to the given email address.')
-	parser.add_argument('-o', '--output', action='store', default='',
-		help='Output file to write to.')
-	parser.add_argument('-s', '--skip', action='store_true',
-		help='Skip the next scheduled feeding task.')
-	parser.add_argument('-t', '--time', action='store', default='0.2',
-		help='Amount of time the motor should run for.')
-	parser.add_argument('-u', '--unskip', action='store_true',
-		help='Unskip the next scheduled feeding task.')
+	# Setup the arg parser and logger
+	parser = setup_argument_parser()
 	args = parser.parse_args()
-	output = args.output
+	logger = setup_logger(logFile=args.log_file)
 
+	# Help
 	if len(sys.argv) == 1:
 		parser.print_help()
 		return 0
-	elif args.skip:
-		skip_feeding_task_setup(output=output)
+
+	# Log parameters
+	logger.info(f"angle       = {args.angle}")
+	logger.info(f"notify_addr = {args.notify_addr}")
+	logger.info(f"skip        = {args.skip}")
+	logger.info(f"unskip      = {args.unskip}")
+	logger.info(f"log_file    = {args.log_file}")
+
+	# Skip feeding
+	if args.skip:
+		create_skip_indicator_file()
 		return 0
+
+	# Unskip feeding
 	elif args.unskip:
-		unskip_feeding_task(output=output)
+		cleanup_skip_indicator_file()
 		return 0
-	elif should_skip_feeding_task():
-		skip_feeding_task_cleanup(email=args.email, output=output)
+
+	# Feeding should be skipped instead of dispensing food because a skip indicator
+	# file was found
+	elif find_skip_indicator_file():
+		cleanup_skip_indicator_file(addr=args.notify_addr)
 		return 0
-	else:
-		pass
 
-	direction = args.direction
-	duration = args.time
-	servo = motor.servo.ServoMotor(PIN, duration=duration)
+	# Invalid angle
+	elif abs(args.angle) < 0 or abs(args.angle) > 360:
+		logger.error(f"Invalid angle : {args.angle}. Allowed angles are +/- 0 to 360 degrees.")
+		return 4
 
-	if not check_servo(servo):
-		return ESERVO
-	elif not check_direction(direction):
-		return EDIRECTION
-	else:
-		return run(servo, direction, output=output)
+	# Create the servo object
+	servo = rpiservolib.SG90servo("servoone", SERVO_FREQUENCY)
 
-def print_output(message, filepath=''):
-	'''
-	Print the output to stdout or to the designated filepath, if one is specified.
-	'''
+	# Run the servo
+	return run(servo, args.angle)
 
-	if filepath:
-		with open(filepath, 'a+') as handle:
-			handle.write('{0}\n'.format(message))
-	else:
-		print message
-	return
-
-def run(servo, direction, output=''):
+def run(servo, angle):
 	'''
 	Run the cat feeder.
 	'''
 
-	if is_clockwise(direction):
-		servo.run_cw()
-	elif is_counter_clockwise(direction):
-		servo.run_ccw()
-	else:
-		return EDIRECTION
+	##
+	# 7.8 = 90 deg
+	# 8.3 = 180 deg
+	##
+	# Didn't move from 6.9 - 7.35
+	#
+	##
+	# CCW
+	# 
+	# 7.7-7.9 = 45 deg
+	# 
+	# 8.3-8.4 = 90 deg
+	##
+	# CW
+	# 
+	# 6.35 - 6.45 = 45 deg
+	# 
+	# 5.8 - 6 = 90 deg
+	# 
 
-	message = "[%s] Food dispensed." % time.strftime("%Y-%m-%d %H:%M:%S %Z")
-	print_output(message, filepath=output)
+	logger.info("Dispensing food.")
+
+	# Spin CCW
+	if angle > 0:
+		for a in range(0, angle, 90):
+			# 90
+			servo.servo_move(SERVO_PIN, position=8.3, verbose=True)
+			# 45
+			#servo.servo_move(SERVO_PIN, position=7.7, verbose=True)
+
+	# Spin CW
+	elif angle < 0:
+		for a in range(0, -angle, 90):
+			# 90
+			servo.servo_move(SERVO_PIN, position=6.4, verbose=True)
+			# 45
+			#servo.servo_move(SERVO_PIN, position=5.9, verbose=True)
+
+	# Cleanup GPIOs
+	GPIO.cleanup()
+
 	return 0
 
-def should_skip_feeding_task():
+def send_message(addr, message):
 	'''
-	Return True if the feeding task should be skipped, and False otherwise.
-	'''
-
-	filepath = get_recent_skip_indicator()
-	return len(filepath) > 0
-
-def skip_feeding_task_cleanup(email='', output=''):
-	'''
-	Cleanup the most recent indicator to skip the next scheduled feeding task.
+	Send a message to a ntfy.sh address.
 	'''
 
-	message = "Scheduled feeding task has been skipped."
-	timestamp = time.strftime("%Y-%m-%d %H:%M:%S %Z")
-	timestampedMessage = "[{0}] {1}".format(timestamp, message)
-	filepath = get_recent_skip_indicator()
+	# Invalid address
+	if not addr:
+		return
 
-	print_output(timestampedMessage, filepath=output)
-	email_message(email, timestampedMessage)
+	logger.info(f"Sending message : {message.replace('\n', ' - ')}")
 
-	if filepath:
-		os.remove(filepath)
+	# Send message
+	response = requests.put(
+		addr,
+		data=message,
+		headers= {
+			"Markdown" : "yes",
+			"Tags": "no_entry_sign",
+		},
+	)
+
 	return
 
-def email_message(email, message):
-	'''
-	Email the message to the given email address.
-	'''
+def setup_argument_parser():
+	"""
+	Setup the argument parser.
 
-	command = 'echo "{0}" | /usr/bin/mail -s "Cat Feeder" "{1}"'.format(message, email)
-	print command
-	os.system(command)
-	return
+	Returns:
+		argparse.ArgumentParser: The argument parser.
+	"""
 
-def skip_feeding_task_setup(output=''):
-	'''
-	Create a file that acts as an indicator to skip the next scheduled feeding task.
-	'''
+	# Create the parser
+	parser = argparse.ArgumentParser(
+		prog=os.path.basename(sys.argv[0]),
+		description='Cat food dispenser that drives a servo motor to dispense food.'
+	)
 
-	message = "[%s] Preparing to skip the next scheduled feeding task." \
-		% time.strftime("%Y-%m-%d %H:%M:%S %Z")
-	print_output(message, filepath=output)
+	# Add arguments
+	parser.add_argument('-a', '--angle',
+		default='45',
+		type=int,
+		help='Amount of time the motor should run for.')
 
-	tmpdir = '/tmp'
-	naming = get_skip_indicator_naming_convention()
-	tempfile.mkstemp(prefix='{0}_'.format(naming), suffix='.txt', dir=tmpdir)
-	return
+	parser.add_argument('-l', '--log-file',
+		default='',
+		help='Log file to write to.')
 
-def unskip_feeding_task(output=''):
-	'''
-	Unskip the most recent indicator that would have skipped the next scheduled
-	feeding task.
-	'''
+	parser.add_argument('-n', '--notify-addr',
+		default='',
+		help='Notify any issues or snapshots to this ntfy.sh address.')
 
-	message = "[%s] Unskipping the next scheduled feeding task." \
-		% time.strftime("%Y-%m-%d %H:%M:%S %Z")
-	print_output(message, filepath=output)
+	parser.add_argument('-S', '--skip',
+		action='store_true',
+		help='Skip the next scheduled feeding task.')
 
-	filepath = get_recent_skip_indicator()
-	if filepath:
-		os.remove(filepath)
-	return
+	parser.add_argument('-U', '--unskip',
+		action='store_true',
+		help='Unskip the next scheduled feeding task.')
+
+	return parser
+
+def setup_logger(
+		logFile="",
+		logFmt="[%(asctime)s]  %(levelname)s  %(message)s",
+		dateFmt="%Y-%m-%d %I:%M:%S %p",
+		level=logging.INFO,
+		maxBytes=1000000,
+		backupCount=2,
+		encoding="utf-8"
+	):
+	"""
+	Setup the logger.
+
+	Args:
+		logFile (str, optional): Path to the log file. If empty, messages will
+			be printed in the console. [Default=""]
+		logFmt (str, optional): Format of log messages.
+		dateFmt (str, optional): Date format for the date in the log messages.
+		level (int, optional): Log level to use. [Default=logging.INFO]
+		maxBytes (int, optional): Max number of bytes before the log file is rotated.
+			[Default=1000000]
+		backupCount (int, optional): Max number of backup files for the rotating log.
+			[Default=3]
+		encoding (str, optional): Encoding to use for the log file. [Default="utf-8"]
+
+	Returns:
+		logging.Logger: The logger.
+	"""
+
+	# Create the logger and formatter
+	formatter = logging.Formatter(
+		fmt=logFmt,
+		datefmt=dateFmt
+	)
+
+	# Log messages will be sent to rotating file
+	if logFile:
+		handler = RotatingFileHandler(
+			logFile,
+			maxBytes=maxBytes,
+			backupCount=backupCount,
+			encoding=encoding
+		)
+
+	# Messages will be printed to the console
+	else:
+		handler = logging.StreamHandler()
+
+	# Setup the logger
+	handler.setFormatter(formatter)
+	logger.addHandler(handler)
+	logger.setLevel(level)
+
+	return logger
 
 if __name__ == '__main__':
 	ret = main()
