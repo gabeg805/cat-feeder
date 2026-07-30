@@ -4,7 +4,9 @@
 #     catfeeder.py
 # 
 # SYNOPSIS
-#     catfeeder.py [options] <args>
+#     catfeeder.py --angle=<ANGLE> [--notify-addr=<ADDRESS>] [--log-file=<LOG_FILE>]
+#     catfeeder.py --skip [--log-file=<LOG_FILE>]
+#     catfeeder.py --unskip [--log-file=<LOG_FILE>]
 # 
 # DESCRIPTION
 #     Run a servo motor to dispense food from a cat feeder.
