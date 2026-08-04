@@ -9,7 +9,13 @@ cereal dispenser, allowing dry food to be released.
 
 ## Installation
 
-Clone the repo:
+**1.** Install RpiMotorLib:
+
+```
+sudo apt install python3-rpi-lgpio
+```
+
+**2.** Clone the repo:
 
 ```
 git clone https://github.com/gabeg805/cat-feeder
