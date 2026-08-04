@@ -11,7 +11,9 @@ cereal dispenser, allowing dry food to be released.
 
 Clone the repo:
 
-`git clone https://github.com/gabeg805/cat-feeder`
+```
+git clone https://github.com/gabeg805/cat-feeder
+```
 
 > [!NOTE]
 > Ensure the `SERVO_PIN` variable in `catfeeder.py` matches the same pin in
@@ -23,22 +25,30 @@ Clone the repo:
 
 Allowed angles are +/- 0 to 360 degrees.
 
-`catfeeder.py --angle=<ANGLE>`
+```
+catfeeder.py --angle=<ANGLE>
+```
 
 ### Run the servo motor, and if this run is meant to be skipped, send a message to an [ntfy.sh](https://ntfy.sh) address
 
-`catfeeder.py --angle=<ANGLE> --notify-addr=<ADDRESS>`
+```
+catfeeder.py --angle=<ANGLE> --notify-addr=<ADDRESS>
+```
 
 ### Skip the next time the motor is run
 
 You may want to skip, as an example, if you are giving your cat wet food, and
 you do not need the dry food dispensed.
 
-`catfeeder.py --skip`
+```
+catfeeder.py --skip
+```
 
 ### Undo a previous skip that was run
 
-`catfeeder.py --unskip`
+```
+catfeeder.py --unskip
+```
 
 ### Log output to a file
 
@@ -50,4 +60,6 @@ line.
 
 Remove the repo:
 
-`rm -rf cat-feeder/`
+```
+rm -rf cat-feeder/
+```
