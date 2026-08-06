@@ -43,7 +43,7 @@ catfeeder.py --angle=<ANGLE>
 catfeeder.py --angle=<ANGLE> --notify-addr=<ADDRESS>
 ```
   
-<div style="height: 1px; border: none; background-color: #ccc;">
+<hr style="height: 1px; border: none; background-color: #0000ff;">
   
 ### Skip the next time the motor is run
 
@@ -54,7 +54,7 @@ you do not need the dry food dispensed.
 catfeeder.py --skip
 ```
   
----
+<hr style="height: 1px; border: none; background-color: #00ff00;">
   
 ### Undo a previous skip that was run
 
@@ -62,7 +62,7 @@ catfeeder.py --skip
 catfeeder.py --unskip
 ```
   
----
+<hr style="height: 1px; border: none; background-color: #ff0000;">
   
 ### Log output to a file
 
