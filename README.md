@@ -35,7 +35,12 @@ Allowed angles are +/- 0 to 360 degrees.
 catfeeder.py --angle=<ANGLE>
 ```
   
-<hr style="height: 1px; border: none; background-color: #ccc;">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://placeholder.com+">
+  <source media="(prefers-color-scheme: light)" srcset="https://placeholder.com+">
+  <img alt="Horizontal Line" src="https://placeholder.com+" width="100%" height="1" />
+</picture>
+
   
 ### Run the servo motor, and if this run is meant to be skipped, send a message to an [ntfy.sh](https://ntfy.sh) address
 
