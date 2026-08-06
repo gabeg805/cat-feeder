@@ -35,16 +35,19 @@ Allowed angles are +/- 0 to 360 degrees.
 catfeeder.py --angle=<ANGLE>
 ```
   
+<!-- Dummy comment -->
 *****
+<!-- Dummy comment -->
   
 ### Run the servo motor, and if this run is meant to be skipped, send a message to an [ntfy.sh](https://ntfy.sh) address
 
 ```
 catfeeder.py --angle=<ANGLE> --notify-addr=<ADDRESS>
 ```
-  
+
+<!-- Dummy comment -->
 *****
-  
+
 ### Skip the next time the motor is run
 
 You may want to skip, as an example, if you are giving your cat wet food, and
@@ -54,6 +57,7 @@ you do not need the dry food dispensed.
 catfeeder.py --skip
 ```
   
+<!-- Dummy comment -->
 *****
   
 ### Undo a previous skip that was run
@@ -62,7 +66,9 @@ catfeeder.py --skip
 catfeeder.py --unskip
 ```
   
+<!-- Dummy comment -->
 _____
+<!-- Dummy comment -->
   
 ### Log output to a file
 
