@@ -44,10 +44,10 @@ usage()
 PROJECT="${0##*/}"
 
 # Input directory where images are
-INPUT_DIR="${HOME}/katty/static/pics/feeder"
+INPUT_DIR="${HOME}/projects/katty/static/pics/feeder"
 
 # Output directory for montages
-MONTAGE_OUTPUT_DIR="${HOME}/katty/static/pics/montage"
+MONTAGE_OUTPUT_DIR="${HOME}/projects/katty/static/pics/montage"
 
 # Path to an output file to send
 OUTPUT_PATH=
